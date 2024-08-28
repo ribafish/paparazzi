@@ -174,6 +174,15 @@ public class PaparazziPlugin @Inject constructor(
         isVerifyRun.set(verifyTaskProvider.map { graph.hasTask(it) })
       }
 
+      val dummyUnusedInputDir = project.layout.buildDirectory.dir("tmp/paparazzi/dummyUnusedInputDir$variantSlug")
+      val dummyUnusedOutputDir = project.layout.buildDirectory.dir("tmp/paparazzi/dummyUnusedOutputDir$variantSlug")
+      val dummyUnusedInputDirProviderTask = project.tasks.register("paparazziDummyUnusedDir${variantSlug}Provider") {
+        it.outputs.dir(dummyUnusedInputDir)
+        it.doLast {
+          dummyUnusedInputDir.get().asFile.mkdirs()
+        }
+      }
+
       val testTaskProvider =
         project.tasks.withType(Test::class.java).named { it == "test$testVariantSlug" }
       testTaskProvider.configureEach { test ->
@@ -205,8 +214,14 @@ public class PaparazziPlugin @Inject constructor(
           .withPropertyName("paparazzi.nativeRuntime")
           .withPathSensitivity(PathSensitivity.NONE)
 
+        test.dependsOn(dummyUnusedInputDirProviderTask)
+        test.inputs.dir(isVerifyRun.map { if (it) snapshotOutputDir else dummyUnusedInputDir })
+          .withPropertyName("paparazzi.snapshot.input.dir")
+          .withPathSensitivity(PathSensitivity.RELATIVE)
+        test.outputs.dir(isRecordRun.map { if (it) snapshotOutputDir else dummyUnusedOutputDir })
+          .withPropertyName("paparazzi.snapshot.output.dir")
         test.outputs.dir(reportOutputDir)
-        test.outputs.dir(snapshotOutputDir)
+          .withPropertyName("paparazzi.report.dir")
 
         test.doFirst {
           // Note: these are lazy properties that are not resolvable in the Gradle configuration phase.
